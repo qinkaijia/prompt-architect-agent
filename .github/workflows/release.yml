@@ -40,10 +40,12 @@ jobs:
         run: |
           $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "v0.2.0-dev" }
           $version = $tag.TrimStart("v")
+          $versionInfo = if ($env:GITHUB_REF_TYPE -eq "tag") { "$version.0" } else { "0.2.0.0" }
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup 6 is unavailable" }
           New-Item -ItemType Directory -Force -Path dist\release | Out-Null
-          & $iscc "/DMyAppVersion=$version" packaging\windows-installer.iss
+          & $iscc "/DMyAppVersion=$version" "/DMyVersionInfo=$versionInfo" packaging\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
           Compress-Archive -Path dist\PromptArchitect\* -DestinationPath "dist\release\Prompt-Architect-$version-Portable.zip"
           $portableRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-portable"
           $installRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-installed"
