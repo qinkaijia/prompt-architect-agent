@@ -3,84 +3,65 @@
 [![CI](https://github.com/qinkaijia/prompt-architect-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/qinkaijia/prompt-architect-agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Prompt Architect Agent is a rule-based CLI that turns a natural-language task into the smallest sufficient prompt—or prompt package—for the target AI. It analyzes task type, ambiguity, risk, context size, and validation difficulty before choosing a strategy.
+Prompt Architect Agent 是一个本地优先的提示词架构工作台。它先分析任务类型、歧义、风险、上下文和验证难度，再选择精简、结构化、分阶段或项目任务包策略，为 Codex、Claude Code、通用聊天模型和图像模型生成可核查的提示词。
 
-提示词架构师智能体不是简单润色输入。它先标准化需求、解释复杂度、选择合适粒度，再为 Codex、Claude Code、通用聊天模型或图像模型编译可核查的提示词。
+它不会调用商业模型 API，也不会扫描或上传你的仓库。
 
-## Features
+## 功能
 
-- Four strategies: compact, structured, staged, and project prompt package.
-- Six explainable complexity dimensions with YAML-configured signals.
-- Codex, Claude Code, chat model, and image model adapters.
-- Chinese output by default, with English templates available.
-- Context manifests that index files without bulk-reading repositories or PDFs.
-- A quality gate for missing deliverables, conflicts, secrets, fabricated execution, unverifiable claims, and broad repository changes.
-- Atomic, non-overwriting Markdown and JSON output.
-- No external model or commercial API calls.
+- Windows 桌面应用，无需打开终端。
+- 本地浏览器工作台与完整 CLI。
+- 六维复杂度评分及逐项理由。
+- 四种提示词策略和四个目标模型适配器。
+- 中文默认、英文可选。
+- Markdown 预览、源码查看、复制和 ZIP 下载。
+- SQLite 历史搜索、归档和旧输出导入。
+- 文件与目录只建立路径索引，不读取内容。
+- 敏感信息脱敏、质量门禁和原子化输出。
 
-## Install
+## Windows 桌面版
+
+从 [Releases](https://github.com/qinkaijia/prompt-architect-agent/releases) 下载：
+
+- `Prompt-Architect-0.2.0-Setup.exe`：安装版。
+- `Prompt-Architect-0.2.0-Portable.zip`：免安装便携版。
+
+启动后数据默认保存在 `%LOCALAPPDATA%\PromptArchitect\`。应用安装后可离线使用。
+
+## Python 安装
 
 ```bash
 python -m venv .venv
 # Windows
 .venv\Scripts\activate
+python -m pip install -e ".[web]"
+```
+
+启动本地浏览器工作台：
+
+```bash
+python -m prompt_architect web
+```
+
+只使用 CLI：
+
+```bash
 python -m pip install -e .
-```
-
-For development:
-
-```bash
-python -m pip install -e ".[dev]"
-pytest
-```
-
-## CLI
-
-Interactive generation:
-
-```bash
 python -m prompt_architect generate
 ```
 
-Generate from one task:
+常用命令：
 
 ```bash
-python -m prompt_architect generate \
-  --task "让 Codex 修改一个 Python 函数，为函数增加输入参数检查。"
-```
-
-Analyze without writing files:
-
-```bash
-python -m prompt_architect analyze \
-  --task "让 Codex 开发一个可切换百度和讯飞的 ASR 模块。"
-```
-
-Review an existing prompt:
-
-```bash
+python -m prompt_architect generate --task "让 Codex 修改一个 Python 函数，为函数增加输入参数检查。"
+python -m prompt_architect analyze --task "让 Codex 开发一个可切换百度和讯飞的 ASR 模块。"
 python -m prompt_architect review path/to/PROMPT.md
+python -m prompt_architect web --no-open --port 8765
 ```
 
-Useful options:
+## 生成物
 
-```text
---target-agent codex|claude_code|chat_model|image_model
---language zh-CN|en
---output PATH
---allow-staged / --no-staging
---deliverable TEXT
---context TEXT
---file PATH
---constraint TEXT
---acceptance TEXT
-```
-
-Repeat list options to provide multiple values. `--output` is a base directory; each successful run creates a unique `<task-type>-<timestamp>/` child directory.
-
-## Output
-
-Compact and structured tasks create `PROMPT.md`. Staged tasks create `STAGE_INDEX.md` and individual stage prompts. Project-level tasks create:
+精简和结构化任务生成 `PROMPT.md`；分阶段任务生成阶段索引和独立阶段文件；项目任务包生成：
 
 ```text
 PROJECT_BRIEF.md
@@ -92,41 +73,31 @@ CONTEXT_MANIFEST.md
 ACCEPTANCE_CRITERIA.md
 ```
 
-Every successful run also writes `TASK_ANALYSIS.json` and `REVIEW_REPORT.json`. The original request is kept in memory only; persisted analysis contains the secret-redacted request.
+每次成功生成还会保存脱敏后的 `TASK_ANALYSIS.json` 和 `REVIEW_REPORT.json`。原始请求只存在于内存中。
 
-## Strategy thresholds
+## 开发
 
-| Score | Strategy |
-|---:|---|
-| 0–4 | `compact_prompt` |
-| 5–8 | `structured_prompt` |
-| 9–13 | `staged_prompt` |
-| 14–18 | `project_prompt_package` |
+```bash
+python -m pip install -e ".[web,dev]"
+python -m pytest
 
-The six dimensions are scope, dependencies, ambiguity, risk, context size, and validation difficulty. Each dimension is scored from 0 to 3 with matched signals and a human-readable reason.
-
-## Architecture
-
-```text
-Request → Analyzer → Classifier → Missing-info gate → Complexity scorer
-        → Strategy router → Context manager → Model adapter → Jinja compiler
-        → Prompt reviewer → Atomic publisher
+cd frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
-See [architecture](docs/architecture.md), [prompt strategy](docs/prompt_strategy.md), and [roadmap](docs/development_roadmap.md) for details.
+架构说明见 [docs/architecture.md](docs/architecture.md)，Web 与桌面设计见 [docs/web_desktop.md](docs/web_desktop.md)，策略说明见 [docs/prompt_strategy.md](docs/prompt_strategy.md)。
 
-## Current limitations
+## 当前边界
 
-- Requirement extraction is deterministic and keyword-based; it is intentionally not an LLM parser.
-- Repository paths are indexed but the repository is not scanned automatically.
-- PDF and datasheet content is not extracted.
-- Feedback learning, persistence, RAG, web UI, and model API integrations are outside the MVP.
-- Rule classification is transparent but will not understand every paraphrase.
+- 需求抽取与分类仍是确定性的规则实现。
+- 不调用 Codex、Claude 或其他模型，也不启动对应进程。
+- 不自动扫描仓库、读取文件内容、解析 PDF 或执行 RAG。
+- 不提供云端登录、多用户、永久删除和自动更新。
+- 历史记录只保存在当前设备。
 
-## Contributing and security
+## 贡献与安全
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow. Do not include credentials in tasks or generated prompt fixtures; report security issues according to [SECURITY.md](SECURITY.md).
-
-## License
-
-Licensed under the [Apache License 2.0](LICENSE).
+参见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。项目采用 [Apache License 2.0](LICENSE)。

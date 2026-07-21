@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prompt-architect-agent"
-version = "0.1.0"
-description = "A rule-based prompt architecture CLI that selects the right prompt strategy for each task."
+version = "0.2.0"
+description = "A local-first prompt architecture workbench for desktop, browser, and CLI use."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -29,10 +29,32 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+web = [
+  "fastapi>=0.115,<1",
+  "platformdirs>=4,<5",
+  "uvicorn>=0.34,<1",
+]
+desktop = [
+  "fastapi>=0.115,<1",
+  "platformdirs>=4,<5",
+  "pywebview>=5.4,<7",
+  "uvicorn>=0.34,<1",
+]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8,<10",
+]
+build = [
+  "fastapi>=0.115,<1",
+  "platformdirs>=4,<5",
+  "pyinstaller>=6.12,<7",
+  "pywebview>=5.4,<7",
+  "uvicorn>=0.34,<1",
+]
 
 [project.scripts]
 prompt-architect = "prompt_architect.cli:app"
+prompt-architect-desktop = "prompt_architect.web.desktop:main"
 
 [project.urls]
 Homepage = "https://github.com/qinkaijia/prompt-architect-agent"
@@ -43,7 +65,7 @@ Issues = "https://github.com/qinkaijia/prompt-architect-agent/issues"
 include = ["prompt_architect*"]
 
 [tool.setuptools.package-data]
-prompt_architect = ["config/*.yaml", "templates/*/*.j2"]
+prompt_architect = ["config/*.yaml", "templates/*/*.j2", "web/static/**/*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

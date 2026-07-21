@@ -1,0 +1,78 @@
+name: Windows Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Install application build dependencies
+        run: python -m pip install ".[build,dev]"
+      - name: Test
+        run: pytest
+      - name: Build portable application
+        run: python -m PyInstaller --noconfirm packaging/prompt-architect.spec
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer and checksums
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "v0.2.0-dev" }
+          $version = $tag.TrimStart("v")
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup 6 is unavailable" }
+          New-Item -ItemType Directory -Force -Path dist\release | Out-Null
+          & $iscc "/DMyAppVersion=$version" packaging\windows-installer.iss
+          Compress-Archive -Path dist\PromptArchitect\* -DestinationPath "dist\release\Prompt-Architect-$version-Portable.zip"
+          $portableRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-portable"
+          $installRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-installed"
+          $smokeData = Join-Path $env:RUNNER_TEMP "prompt-architect-smoke-data"
+          Expand-Archive "dist\release\Prompt-Architect-$version-Portable.zip" $portableRoot
+          $env:PROMPT_ARCHITECT_DATA_DIR = $smokeData
+          $portable = Start-Process -FilePath "$portableRoot\PromptArchitect.exe" -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($portable.ExitCode -ne 0) { throw "Portable package smoke test failed" }
+          $setup = Get-Item "dist\release\Prompt-Architect-$version-Setup.exe"
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$installRoot" -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "Installer smoke test failed" }
+          $installed = Start-Process -FilePath "$installRoot\PromptArchitect.exe" -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "Installed application smoke test failed" }
+          Get-ChildItem -LiteralPath dist\release -File |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content -Encoding utf8 dist\release\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: prompt-architect-windows
+          path: dist/release/*
+      - name: Publish tagged release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --title "Prompt Architect $env:GITHUB_REF_NAME" --notes-file docs/release-notes-v0.2.0.md
+          }
+          gh release upload $env:GITHUB_REF_NAME dist\release\* --clobber

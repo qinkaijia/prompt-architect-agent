@@ -106,6 +106,40 @@ class PromptArchitect:
         output_base: Path | None = None,
         context_base: Path | None = None,
     ) -> GenerationResult:
+        result = self.build(
+            raw_request,
+            target_agent=target_agent,
+            deliverables=deliverables,
+            known_context=known_context,
+            available_files=available_files,
+            constraints=constraints,
+            forbidden_actions=forbidden_actions,
+            tools=tools,
+            acceptance_criteria=acceptance_criteria,
+            language=language,
+            allow_staged=allow_staged,
+            context_base=context_base,
+        )
+        output_dir = self.publisher.publish(result, output_base)
+        return result.model_copy(update={"output_dir": output_dir})
+
+    def build(
+        self,
+        raw_request: str,
+        *,
+        target_agent: TargetAgent | None = None,
+        deliverables: list[str] | None = None,
+        known_context: list[str] | None = None,
+        available_files: list[str] | None = None,
+        constraints: list[str] | None = None,
+        forbidden_actions: list[str] | None = None,
+        tools: list[str] | None = None,
+        acceptance_criteria: list[str] | None = None,
+        language: Language = Language.ZH_CN,
+        allow_staged: bool = True,
+        context_base: Path | None = None,
+    ) -> GenerationResult:
+        """Compile and review a generation result without writing to disk."""
         task, assessment, decision = self.analyze(
             raw_request,
             target_agent=target_agent,
@@ -143,5 +177,4 @@ class PromptArchitect:
             artifacts=artifacts,
             review=review,
         )
-        output_dir = self.publisher.publish(result, output_base)
-        return result.model_copy(update={"output_dir": output_dir})
+        return result
