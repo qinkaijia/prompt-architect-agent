@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 from prompt_architect.publisher import ArtifactPublisher
+from prompt_architect.schemas import GenerationResult
 from prompt_architect.service import PromptArchitect
 from prompt_architect.web.models import GenerationRequest, RunDetail, RunListResponse
 from prompt_architect.web.paths import AppPaths
@@ -22,6 +23,9 @@ class RunService:
 
     def create(self, request: GenerationRequest) -> RunDetail:
         result = self.architect.build(**request.service_kwargs())
+        return self.publish_result(result)
+
+    def publish_result(self, result: GenerationResult) -> RunDetail:
         output_dir = self.publisher.publish(result, self.paths.runs)
         try:
             run_id = self.history.record(result, output_dir)

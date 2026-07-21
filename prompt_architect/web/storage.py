@@ -13,7 +13,7 @@ from prompt_architect.web.models import ArtifactMetadata, RunDetail, RunSummary
 from prompt_architect.web.paths import AppPaths
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class HistoryStore:
@@ -75,6 +75,41 @@ class HistoryStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS agent_sessions (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    sanitized_request TEXT NOT NULL,
+                    target_agent TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    clarification_round INTEGER NOT NULL DEFAULT 0,
+                    questions_json TEXT NOT NULL DEFAULT '[]',
+                    run_id TEXT REFERENCES runs(id),
+                    last_error TEXT
+                );
+                CREATE TABLE IF NOT EXISTS agent_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    input_tokens INTEGER NOT NULL,
+                    output_tokens INTEGER NOT NULL,
+                    total_tokens INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated ON agent_sessions(updated_at DESC);
                 """
             )
             row = connection.execute("SELECT COUNT(*) FROM schema_version").fetchone()
@@ -82,6 +117,113 @@ class HistoryStore:
                 connection.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             else:
                 connection.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        with self._connect() as connection:
+            row = connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return str(row["value"]) if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO settings(key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+
+    def create_agent_session(
+        self,
+        *,
+        session_id: str,
+        sanitized_request: str,
+        target_agent: str,
+        language: str,
+        provider: str,
+        model_id: str,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO agent_sessions (
+                    id, created_at, updated_at, status, sanitized_request,
+                    target_agent, language, provider, model_id
+                ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+                """,
+                (session_id, now, now, sanitized_request, target_agent, language, provider, model_id),
+            )
+
+    def update_agent_session(self, session_id: str, **values: object) -> None:
+        allowed = {
+            "status", "model_id", "clarification_round", "questions_json", "run_id", "last_error"
+        }
+        selected = {key: value for key, value in values.items() if key in allowed}
+        selected["updated_at"] = datetime.now(UTC).isoformat()
+        assignments = ", ".join(f"{key} = ?" for key in selected)
+        with self._connect() as connection:
+            connection.execute(
+                f"UPDATE agent_sessions SET {assignments} WHERE id = ?",
+                [*selected.values(), session_id],
+            )
+
+    def add_agent_message(self, session_id: str, role: str, content: str) -> None:
+        stored = self._excerpt(content, limit=4000)
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO agent_messages(session_id, created_at, role, content) VALUES (?, ?, ?, ?)",
+                (session_id, datetime.now(UTC).isoformat(), role, stored),
+            )
+
+    def add_model_usage(self, session_id: str, *, input_tokens: int, output_tokens: int, total_tokens: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO model_usage(
+                    session_id, created_at, input_tokens, output_tokens, total_tokens
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, datetime.now(UTC).isoformat(), input_tokens, output_tokens, total_tokens),
+            )
+
+    def get_agent_session(self, session_id: str) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM agent_sessions WHERE id = ?", (session_id,)).fetchone()
+            if row is None:
+                return None
+            usage = connection.execute(
+                """
+                SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0),
+                       COALESCE(SUM(total_tokens), 0)
+                FROM model_usage WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+        return {
+            **dict(row),
+            "questions": json.loads(row["questions_json"] or "[]"),
+            "input_tokens": int(usage[0]),
+            "output_tokens": int(usage[1]),
+            "total_tokens": int(usage[2]),
+        }
+
+    def list_agent_sessions(self, *, limit: int = 30) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id FROM agent_sessions ORDER BY updated_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [item for row in rows if (item := self.get_agent_session(row["id"])) is not None]
+
+    def fail_incomplete_agent_sessions(self) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE agent_sessions
+                SET status = 'failed', updated_at = ?,
+                    last_error = '应用已重启，请重新开始智能生成。'
+                WHERE status IN ('pending', 'clarifying', 'generating', 'reviewing', 'repairing')
+                """,
+                (datetime.now(UTC).isoformat(),),
+            )
 
     def record(self, result: GenerationResult, output_dir: Path, *, run_id: str | None = None) -> str:
         identifier = run_id or str(uuid4())

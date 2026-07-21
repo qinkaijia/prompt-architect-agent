@@ -98,3 +98,56 @@ class ApiError(BaseModel):
     message: str
     questions: list[str] = Field(default_factory=list)
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+class CredentialRequest(BaseModel):
+    api_key: str
+
+
+class ModelSettingRequest(BaseModel):
+    model_id: str = Field(default="auto", min_length=1, max_length=200)
+
+
+class DesktopGrantRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=10)
+
+
+class ContextGrantResponse(BaseModel):
+    id: str
+    files: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentSessionCreate(GenerationRequest):
+    model_id: str = "auto"
+    offline_rules: bool = False
+    context_grants: list[str] = Field(default_factory=list, max_length=10)
+
+
+class AgentTurnRequest(BaseModel):
+    answers: list[str] = Field(default_factory=list, max_length=3)
+
+
+class AgentSessionSummary(BaseModel):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    status: Literal[
+        "pending", "clarifying", "generating", "reviewing", "repairing",
+        "completed", "failed", "cancelled"
+    ]
+    sanitized_request: str
+    target_agent: str
+    language: str
+    provider: str
+    model_id: str
+    clarification_round: int = 0
+    questions: list[str] = Field(default_factory=list)
+    run_id: str | None = None
+    last_error: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class AgentSessionDetail(AgentSessionSummary):
+    run: RunDetail | None = None

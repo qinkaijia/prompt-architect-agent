@@ -8,7 +8,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 datas = collect_data_files("prompt_architect")
 hiddenimports = collect_submodules("uvicorn") + collect_submodules(
     "webview", filter=lambda name: not name.endswith(".android")
-)
+) + ["keyring.backends.Windows"]
 project_root = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 a = Analysis(
