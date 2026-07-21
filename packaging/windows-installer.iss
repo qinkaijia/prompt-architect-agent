@@ -1,6 +1,9 @@
 #ifndef MyAppVersion
   #define MyAppVersion "0.2.0"
 #endif
+#ifndef MyVersionInfo
+  #define MyVersionInfo "0.2.0.0"
+#endif
 
 [Setup]
 AppId={{F474A855-6BBE-4B5B-A9A6-2278974F2E34}
@@ -21,7 +24,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\PromptArchitect.exe
-VersionInfoVersion={#MyAppVersion}
+VersionInfoVersion={#MyVersionInfo}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
