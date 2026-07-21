@@ -1,0 +1,9 @@
+# Project Acceptance Checklist
+
+{% for item in task.acceptance_criteria %}- [ ] {{ item }}
+{% endfor %}
+## Deliverable Check
+
+{% for item in task.deliverables %}- [ ] {{ item }}
+{% endfor %}
+Mark an item complete only with actual evidence. Leave unavailable or unverified checks open and explain why.

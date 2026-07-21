@@ -1,0 +1,34 @@
+# Final Prompt
+
+## Goal
+
+{{ task.normalized_goal }}
+
+{% if task.known_context or manifest.items %}
+## Required Context
+
+{% for item in context_groups.required_context %}- `{{ item.path }}`: {{ item.purpose }}
+{% endfor %}{% for item in context_groups.optional_context %}- `{{ item.path }}`: {{ item.purpose }}
+{% endfor %}{% for item in task.known_context %}- {{ item }}
+{% endfor %}
+{% endif %}
+## Constraints
+
+{% for item in task.constraints %}- {{ item }}
+{% endfor %}{% for item in guidance.execution_rules %}- {{ item }}
+{% endfor %}{% for item in task.forbidden_actions %}- {{ item }}
+{% endfor %}
+{% if guidance.required_dimensions %}
+## Visual Specification
+
+{% for item in guidance.required_dimensions %}- **{{ item }}**: Make it explicit from the goal and constraints; use a professional, restrained, fit-for-purpose default when unspecified.
+{% endfor %}
+{% endif %}
+## Deliverables
+
+{% for item in task.deliverables %}- {{ item }}
+{% endfor %}
+## Acceptance Criteria
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}

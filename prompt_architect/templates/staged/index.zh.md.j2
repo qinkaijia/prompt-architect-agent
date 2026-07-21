@@ -1,0 +1,11 @@
+# 分阶段提示词索引
+
+- 总体目标：{{ task.normalized_goal }}
+- 目标工具：`{{ task.target_agent.value }}`
+- 阶段数量：{{ stages | length }}
+
+## 阶段关系
+
+{% for stage in stages %}{{ loop.index }}. **{{ stage.title }}**：{{ stage.goal }}
+{% endfor %}
+各阶段必须按顺序执行；下一阶段只能使用已核查的前序输出，不得假设前序工作已经完成。

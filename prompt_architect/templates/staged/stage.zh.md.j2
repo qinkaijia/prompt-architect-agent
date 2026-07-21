@@ -1,0 +1,34 @@
+# 阶段 {{ stage_number }}/{{ stage_count }}：{{ stage.title }}
+
+## 角色定位
+
+{{ guidance.role }}
+
+## 总体任务
+
+{{ task.normalized_goal }}
+
+## 当前阶段目标
+
+{{ stage.goal }}
+
+## 所需输入
+
+{% for item in stage.inputs %}- {{ item }}
+{% endfor %}
+## 允许执行的操作
+
+{% for item in stage.allowed_actions %}- {{ item }}
+{% endfor %}{% for item in guidance.execution_rules %}- {{ item }}
+{% endfor %}
+## 输出产物
+
+{% for item in stage.outputs %}- {{ item }}
+{% endfor %}
+## 验收标准
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}
+## 下一阶段依赖
+
+{{ stage.next_dependency }}

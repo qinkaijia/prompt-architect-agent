@@ -1,0 +1,20 @@
+scope:
+  level_3: ["完整系统", "整套系统", "项目级", "端到端", "多智能体", "complete system", "entire system", "end-to-end", "full project"]
+  level_2: ["模块", "多个文件", "多模块", "集成", "module", "multiple files", "integration", "subsystem"]
+  level_1: ["函数", "单个文件", "配置", "一句话", "function", "single file", "config", "small change"]
+dependencies:
+  level_3: ["软硬件", "前端", "后端", "传感器", "视觉", "语音", "多个仓库", "hardware and software", "frontend", "backend", "multiple repositories"]
+  level_2: ["现有项目", "当前仓库", "外部 api", "供应商", "芯片手册", "existing project", "current repository", "external api", "vendor", "datasheet"]
+  level_1: ["文件", "代码", "python", "document", "file", "code"]
+context_size:
+  level_3: ["大型 pdf", "芯片手册", "多个仓库", "完整代码库", "large pdf", "datasheet", "multiple repositories", "entire codebase"]
+  level_2: ["当前仓库", "现有项目", "多个文件", "文档集", "current repository", "existing project", "multiple files", "documentation set"]
+  level_1: ["文件", "函数", "代码", "file", "function", "code"]
+validation:
+  level_3: ["硬件测试", "现场测试", "生产环境", "端到端", "hardware test", "field test", "production", "end-to-end"]
+  level_2: ["仿真", "集成测试", "视觉检查", "多次测试", "simulation", "integration test", "visual review", "multiple tests"]
+  level_1: ["测试", "检查", "验证", "test", "check", "validate"]
+risk:
+  critical: ["删除数据", "生产数据库", "烧录", "高压", "医疗", "delete data", "production database", "flash firmware", "high voltage", "medical"]
+  high: ["部署", "凭据", "密码", "api key", "安全", "硬件", "deploy", "credential", "password", "security", "hardware"]
+  medium: ["重构", "修改仓库", "覆盖", "refactor", "modify repository", "overwrite"]

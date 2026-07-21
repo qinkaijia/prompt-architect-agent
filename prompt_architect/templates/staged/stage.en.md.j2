@@ -1,0 +1,34 @@
+# Stage {{ stage_number }}/{{ stage_count }}: {{ stage.title }}
+
+## Role
+
+{{ guidance.role }}
+
+## Overall Task
+
+{{ task.normalized_goal }}
+
+## Current Stage Goal
+
+{{ stage.goal }}
+
+## Inputs
+
+{% for item in stage.inputs %}- {{ item }}
+{% endfor %}
+## Allowed Actions
+
+{% for item in stage.allowed_actions %}- {{ item }}
+{% endfor %}{% for item in guidance.execution_rules %}- {{ item }}
+{% endfor %}
+## Deliverables
+
+{% for item in stage.outputs %}- {{ item }}
+{% endfor %}
+## Acceptance Criteria
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}
+## Next-stage Dependency
+
+{{ stage.next_dependency }}

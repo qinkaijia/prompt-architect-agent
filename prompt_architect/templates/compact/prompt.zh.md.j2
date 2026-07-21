@@ -1,0 +1,34 @@
+# 最终提示词
+
+## 任务目标
+
+{{ task.normalized_goal }}
+
+{% if task.known_context or manifest.items %}
+## 必要上下文
+
+{% for item in context_groups.required_context %}- `{{ item.path }}`：{{ item.purpose }}
+{% endfor %}{% for item in context_groups.optional_context %}- `{{ item.path }}`：{{ item.purpose }}
+{% endfor %}{% for item in task.known_context %}- {{ item }}
+{% endfor %}
+{% endif %}
+## 约束条件
+
+{% for item in task.constraints %}- {{ item }}
+{% endfor %}{% for item in guidance.execution_rules %}- {{ item }}
+{% endfor %}{% for item in task.forbidden_actions %}- {{ item }}
+{% endfor %}
+{% if guidance.required_dimensions %}
+## 视觉规格
+
+{% for item in guidance.required_dimensions %}- **{{ item }}**：依据任务目标和约束明确呈现；未指定处采用专业、克制且适合用途的默认值。
+{% endfor %}
+{% endif %}
+## 输出要求
+
+{% for item in task.deliverables %}- {{ item }}
+{% endfor %}
+## 验收标准
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}

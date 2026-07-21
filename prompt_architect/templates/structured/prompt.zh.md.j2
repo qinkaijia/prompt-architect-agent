@@ -1,0 +1,52 @@
+# 最终提示词
+
+## 一、角色定位
+
+{{ guidance.role }}
+
+## 二、任务目标
+
+{{ task.normalized_goal }}
+
+{% if task.known_context %}
+## 三、项目背景与现有状态
+
+{% for item in task.known_context %}- {{ item }}
+{% endfor %}
+{% endif %}
+{% if manifest.items %}
+## 四、输入资料
+
+{% for item in context_groups.required_context %}- 必须读取 `{{ item.path }}`：{{ item.purpose }}
+{% endfor %}{% for item in context_groups.optional_context %}- 按需读取 `{{ item.path }}`：{{ item.purpose }}
+{% endfor %}{% for item in context_groups.reference_only %}- 仅供参考 `{{ item.path }}`：{{ item.purpose }}
+{% endfor %}
+{% endif %}
+## 五、具体要求
+
+{% for item in task.constraints %}- {{ item }}
+{% endfor %}{% if task.tools %}- 可使用工具：{{ task.tools | join('、') }}
+{% endif %}{% if guidance.required_dimensions %}{% for item in guidance.required_dimensions %}- 明确画面{{ item }}；未指定处采用专业、克制且适合用途的默认值。
+{% endfor %}{% endif %}
+## 六、执行流程
+
+{% for item in guidance.execution_rules %}{{ loop.index }}. {{ item }}
+{% endfor %}
+## 七、输出产物
+
+{% for item in task.deliverables %}- {{ item }}
+{% endfor %}
+## 八、验收标准
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}
+{% if task.forbidden_actions %}
+## 九、禁止事项
+
+{% for item in task.forbidden_actions %}- {{ item }}
+{% endfor %}
+{% endif %}
+## 十、最终汇报格式
+
+{% for item in guidance.final_report %}{{ loop.index }}. {{ item }}
+{% endfor %}

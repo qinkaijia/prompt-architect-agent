@@ -1,0 +1,94 @@
+task_types:
+  image_design:
+    priority: 100
+    keywords: ["图像", "图片", "架构图", "连接图", "示意图", "绘图", "image", "diagram", "illustration", "render"]
+    subtypes:
+      research_figure: ["科研", "论文", "paper", "academic"]
+      system_diagram: ["系统图", "架构图", "连接图", "system diagram", "architecture diagram"]
+  presentation:
+    priority: 95
+    keywords: ["演示文稿", "幻灯片", "ppt", "pptx", "presentation", "slide deck"]
+    subtypes:
+      research_presentation: ["答辩", "科研", "research", "defense"]
+  embedded_system:
+    priority: 90
+    keywords: ["嵌入式", "传感器", "单片机", "mcu", "firmware", "mqtt", "qt", "芯片", "driver", "驱动"]
+    subtypes:
+      sensor_driver: ["传感器", "sensor", "driver", "驱动"]
+      communication: ["mqtt", "uart", "spi", "i2c", "can", "通信"]
+      qt_interface: ["qt", "界面", "gui"]
+      hardware_integration: ["硬件集成", "hardware integration", "整机"]
+  hardware_design:
+    priority: 85
+    keywords: ["硬件设计", "原理图", "pcb", "电路", "antenna", "天线", "hardware design"]
+    subtypes:
+      circuit_design: ["电路", "原理图", "circuit", "schematic"]
+  repository_refactoring:
+    priority: 80
+    keywords: ["重构仓库", "重构项目", "全仓库", "repository refactor", "refactor the project", "refactor repository"]
+    subtypes:
+      architecture_refactor: ["架构重构", "architecture refactor"]
+  code_debugging:
+    priority: 78
+    keywords: ["调试", "修复错误", "修复 bug", "报错", "异常", "debug", "fix bug", "traceback", "error"]
+    subtypes:
+      runtime_error: ["traceback", "运行时", "runtime"]
+  agent_development:
+    priority: 76
+    keywords: ["智能体", "agent", "多智能体", "multi-agent", "prompt architect"]
+    subtypes:
+      prompt_agent: ["提示词", "prompt"]
+  simulation:
+    priority: 74
+    keywords: ["仿真", "模拟", "simulation", "simulate", "hfss", "matlab", "simulink"]
+    subtypes:
+      engineering_simulation: ["hfss", "matlab", "simulink", "工程仿真"]
+  automation:
+    priority: 72
+    keywords: ["自动化", "定时任务", "工作流", "automation", "workflow", "schedule"]
+    subtypes:
+      workflow: ["工作流", "workflow"]
+  data_analysis:
+    priority: 70
+    keywords: ["数据分析", "统计", "可视化数据", "data analysis", "analyze data", "dataset", "csv"]
+    subtypes:
+      statistical_analysis: ["统计", "statistical"]
+  software_development:
+    priority: 65
+    keywords: ["代码", "函数", "模块", "软件", "python", "java", "javascript", "typescript", "api", "开发", "实现", "code", "function", "module", "software", "implement"]
+    subtypes:
+      function_change: ["函数", "function"]
+      module_development: ["模块", "module"]
+      api_development: ["api", "接口"]
+  research:
+    priority: 60
+    keywords: ["研究", "论文分析", "文献", "实验设计", "research", "paper analysis", "literature"]
+    subtypes:
+      literature_review: ["文献", "literature", "综述"]
+  document_writing:
+    priority: 55
+    keywords: ["文档", "报告", "文章", "说明书", "document", "report", "write", "readme"]
+    subtypes:
+      technical_document: ["技术文档", "readme", "说明书", "technical document"]
+  learning:
+    priority: 50
+    keywords: ["学习", "教程", "讲解", "课程", "learn", "tutorial", "explain", "teach"]
+    subtypes:
+      tutorial: ["教程", "tutorial"]
+
+target_inference:
+  image_design: image_model
+  presentation: chat_model
+  embedded_system: codex
+  hardware_design: chat_model
+  repository_refactoring: codex
+  code_debugging: codex
+  agent_development: codex
+  simulation: codex
+  automation: codex
+  data_analysis: chat_model
+  software_development: codex
+  research: chat_model
+  document_writing: chat_model
+  learning: chat_model
+  general: chat_model

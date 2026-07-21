@@ -1,0 +1,9 @@
+# 项目验收清单
+
+{% for item in task.acceptance_criteria %}- [ ] {{ item }}
+{% endfor %}
+## 交付物核查
+
+{% for item in task.deliverables %}- [ ] {{ item }}
+{% endfor %}
+只有具备实际证据的项目才能标记完成；无法运行或验证的项目必须保持未勾选并说明原因。

@@ -1,0 +1,11 @@
+# Staged Prompt Index
+
+- Overall goal: {{ task.normalized_goal }}
+- Target tool: `{{ task.target_agent.value }}`
+- Stage count: {{ stages | length }}
+
+## Stage Flow
+
+{% for stage in stages %}{{ loop.index }}. **{{ stage.title }}**: {{ stage.goal }}
+{% endfor %}
+Run stages in order. A later stage may use only verified outputs from prior stages and must not assume that prior work is complete.

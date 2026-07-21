@@ -1,0 +1,23 @@
+# Project Brief
+
+## Goal
+
+{{ task.normalized_goal }}
+
+## Target Tool
+
+`{{ task.target_agent.value }}`
+
+## Deliverables
+
+{% for item in task.deliverables %}- {{ item }}
+{% endfor %}
+## Constraints
+
+{% for item in task.constraints %}- {{ item }}
+{% endfor %}{% for item in task.forbidden_actions %}- {{ item }}
+{% endfor %}
+## Operating Principles
+
+{% for item in guidance.execution_rules %}- {{ item }}
+{% endfor %}

@@ -1,0 +1,52 @@
+# Final Prompt
+
+## 1. Role
+
+{{ guidance.role }}
+
+## 2. Goal
+
+{{ task.normalized_goal }}
+
+{% if task.known_context %}
+## 3. Background and Current State
+
+{% for item in task.known_context %}- {{ item }}
+{% endfor %}
+{% endif %}
+{% if manifest.items %}
+## 4. Inputs
+
+{% for item in context_groups.required_context %}- Required: `{{ item.path }}` — {{ item.purpose }}
+{% endfor %}{% for item in context_groups.optional_context %}- Optional: `{{ item.path }}` — {{ item.purpose }}
+{% endfor %}{% for item in context_groups.reference_only %}- Reference only: `{{ item.path }}` — {{ item.purpose }}
+{% endfor %}
+{% endif %}
+## 5. Requirements
+
+{% for item in task.constraints %}- {{ item }}
+{% endfor %}{% if task.tools %}- Available tools: {{ task.tools | join(', ') }}
+{% endif %}{% if guidance.required_dimensions %}{% for item in guidance.required_dimensions %}- Make {{ item | lower }} explicit; use a professional, restrained, fit-for-purpose default when unspecified.
+{% endfor %}{% endif %}
+## 6. Execution
+
+{% for item in guidance.execution_rules %}{{ loop.index }}. {{ item }}
+{% endfor %}
+## 7. Deliverables
+
+{% for item in task.deliverables %}- {{ item }}
+{% endfor %}
+## 8. Acceptance Criteria
+
+{% for item in task.acceptance_criteria %}- {{ item }}
+{% endfor %}
+{% if task.forbidden_actions %}
+## 9. Forbidden Actions
+
+{% for item in task.forbidden_actions %}- {{ item }}
+{% endfor %}
+{% endif %}
+## 10. Final Report
+
+{% for item in guidance.final_report %}{{ loop.index }}. {{ item }}
+{% endfor %}
