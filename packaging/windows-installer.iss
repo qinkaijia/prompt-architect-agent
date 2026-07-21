@@ -24,7 +24,6 @@ UninstallDisplayIcon={app}\PromptArchitect.exe
 VersionInfoVersion={#MyAppVersion}
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]

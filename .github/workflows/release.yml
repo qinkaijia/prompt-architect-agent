@@ -44,6 +44,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup 6 is unavailable" }
           New-Item -ItemType Directory -Force -Path dist\release | Out-Null
           & $iscc "/DMyAppVersion=$version" packaging\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
           Compress-Archive -Path dist\PromptArchitect\* -DestinationPath "dist\release\Prompt-Architect-$version-Portable.zip"
           $portableRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-portable"
           $installRoot = Join-Path $env:RUNNER_TEMP "prompt-architect-installed"
