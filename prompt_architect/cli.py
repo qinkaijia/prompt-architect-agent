@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Timer
 from typing import Annotated
 
 import typer
@@ -190,6 +191,36 @@ def review_command(
     _show_review(result)
     if not result.passed:
         raise typer.Exit(code=2)
+
+
+@app.command()
+def web(
+    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
+    open_browser: Annotated[
+        bool, typer.Option("--open/--no-open", help="Open the local workbench in the default browser.")
+    ] = True,
+    data_dir: Annotated[
+        Path | None, typer.Option("--data-dir", help="Override the local application data directory.")
+    ] = None,
+) -> None:
+    """Start the local browser workbench on the loopback interface."""
+    try:
+        import uvicorn
+
+        from prompt_architect.web.app import create_app
+        from prompt_architect.web.paths import AppPaths
+    except ImportError as exc:
+        console.print('[red]Web dependencies are missing. Install with: pip install -e ".[web]"[/red]')
+        raise typer.Exit(code=5) from exc
+
+    paths = AppPaths.from_base(data_dir) if data_dir else AppPaths.default()
+    local_url = f"http://127.0.0.1:{port}"
+    if open_browser:
+        import webbrowser
+
+        Timer(0.8, lambda: webbrowser.open(local_url)).start()
+    console.print(f"Prompt Architect: {local_url}")
+    uvicorn.run(create_app(paths=paths), host="127.0.0.1", port=port, log_level="info")
 
 
 if __name__ == "__main__":

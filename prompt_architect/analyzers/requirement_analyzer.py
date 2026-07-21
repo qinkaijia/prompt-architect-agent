@@ -34,6 +34,16 @@ def _unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
 
 
+def _redact_values(values: Iterable[str] | None) -> tuple[list[str], bool]:
+    redacted: list[str] = []
+    found = False
+    for value in values or []:
+        safe_value, item_found = redact_secrets(value)
+        redacted.append(safe_value)
+        found = found or item_found
+    return redacted, found
+
+
 class RequirementAnalyzer:
     def __init__(self, classifier: RuleTaskClassifier | None = None) -> None:
         self.classifier = classifier or RuleTaskClassifier()
@@ -54,6 +64,20 @@ class RequirementAnalyzer:
         allow_staged: bool = True,
     ) -> TaskSpec:
         sanitized, secret_found = redact_secrets(raw_request.strip())
+        safe_deliverables, found = _redact_values(deliverables)
+        secret_found = secret_found or found
+        safe_context, found = _redact_values(known_context)
+        secret_found = secret_found or found
+        safe_files, found = _redact_values(available_files)
+        secret_found = secret_found or found
+        safe_constraints, found = _redact_values(constraints)
+        secret_found = secret_found or found
+        safe_forbidden, found = _redact_values(forbidden_actions)
+        secret_found = secret_found or found
+        safe_tools, found = _redact_values(tools)
+        secret_found = secret_found or found
+        safe_acceptance, found = _redact_values(acceptance_criteria)
+        secret_found = secret_found or found
         classification = self.classifier.classify(sanitized)
         inferred: list[str] = []
         sources: dict[str, str] = {"raw_request": "user", "language": "user_or_default"}
@@ -65,14 +89,14 @@ class RequirementAnalyzer:
             inferred.append("target_agent")
 
         normalized_goal = self._normalize_goal(sanitized)
-        resolved_deliverables = _unique(deliverables or self._default_deliverables(classification.task_type, language))
+        resolved_deliverables = _unique(safe_deliverables or self._default_deliverables(classification.task_type, language))
         resolved_acceptance = _unique(
-            acceptance_criteria or self._default_acceptance(classification.task_type, selected_target, language)
+            safe_acceptance or self._default_acceptance(classification.task_type, selected_target, language)
         )
-        resolved_context = _unique(known_context or [])
-        resolved_constraints = _unique(constraints or [])
-        resolved_forbidden = _unique(forbidden_actions or [])
-        resolved_tools = _unique(tools or self._tools_from_text(sanitized))
+        resolved_context = _unique(safe_context)
+        resolved_constraints = _unique(safe_constraints)
+        resolved_forbidden = _unique(safe_forbidden)
+        resolved_tools = _unique(safe_tools or self._tools_from_text(sanitized))
 
         if deliverables is None:
             inferred.append("deliverables")
@@ -126,7 +150,7 @@ class RequirementAnalyzer:
             target_agent=selected_target,
             deliverables=resolved_deliverables,
             known_context=resolved_context,
-            available_files=_unique([*(available_files or []), *_PATH_PATTERN.findall(sanitized)]),
+            available_files=_unique([*safe_files, *_PATH_PATTERN.findall(sanitized)]),
             constraints=resolved_constraints,
             forbidden_actions=resolved_forbidden,
             tools=resolved_tools,
