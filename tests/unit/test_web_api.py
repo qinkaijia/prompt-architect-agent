@@ -20,7 +20,7 @@ def test_health_and_meta(tmp_path: Path) -> None:
     assert health.headers["cache-control"] == "no-store"
     assert "frame-ancestors 'none'" in health.headers["content-security-policy"]
     meta = client.get("/api/v1/meta").json()
-    assert meta["version"] == "0.2.0"
+    assert meta["version"] == "0.3.0"
     assert "codex" in meta["target_agents"]
 
 

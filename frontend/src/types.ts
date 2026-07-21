@@ -103,6 +103,46 @@ export interface ApiErrorDetail {
   context: Record<string, unknown>;
 }
 
+export interface ModelInfo {
+  id: string;
+  owned_by: string;
+}
+
+export interface ProviderStatus {
+  provider: "deepseek";
+  configured: boolean;
+  source: "environment" | "credential_store" | "none";
+  key_hint: string | null;
+  connected: boolean;
+  default_model: string;
+  models: ModelInfo[];
+  message: string;
+}
+
+export interface ContextGrant {
+  id: string;
+  files: Array<{ name: string; readable: boolean }>;
+}
+
+export interface AgentSession {
+  id: string;
+  status: "pending" | "clarifying" | "generating" | "reviewing" | "repairing" | "completed" | "failed" | "cancelled";
+  model_id: string;
+  questions: string[];
+  clarification_round: number;
+  run_id: string | null;
+  last_error: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  run: RunDetail | null;
+}
+
+export interface AgentEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
 declare global {
   interface Window {
     pywebview?: {

@@ -1,8 +1,13 @@
 import type {
   AnalysisResponse,
+  AgentEvent,
+  AgentSession,
   ApiErrorDetail,
+  ContextGrant,
   GenerationRequest,
   MetaResponse,
+  ModelInfo,
+  ProviderStatus,
   RunDetail,
   RunListResponse,
 } from "./types";
@@ -31,6 +36,33 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     });
   }
   return response.json() as Promise<T>;
+}
+
+async function parseEventStream(response: Response, onEvent: (event: AgentEvent) => void) {
+  if (!response.ok) {
+    const payload = (await response.json()) as { detail?: ApiErrorDetail };
+    throw new ApiClientError(response.status, payload.detail ?? { code: "request_failed", message: "请求失败。", questions: [], context: {} });
+  }
+  if (!response.body) throw new Error("当前环境不支持流式响应。");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      let event = "message";
+      let data = "{}";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        if (line.startsWith("data: ")) data = line.slice(6);
+      }
+      onEvent({ event, data: JSON.parse(data) as Record<string, unknown> });
+    }
+    if (done) break;
+  }
 }
 
 export const api = {
@@ -64,4 +96,50 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ path }),
     }),
+  provider: () => requestJson<ProviderStatus>("/api/v1/providers/deepseek"),
+  saveCredential: (apiKey: string) =>
+    requestJson<ProviderStatus>("/api/v1/providers/deepseek/credential", {
+      method: "PUT",
+      body: JSON.stringify({ api_key: apiKey }),
+    }),
+  deleteCredential: () =>
+    requestJson<ProviderStatus>("/api/v1/providers/deepseek/credential", { method: "DELETE" }),
+  testProvider: () =>
+    requestJson<ProviderStatus>("/api/v1/providers/deepseek/test", { method: "POST" }),
+  models: () => requestJson<{ items: ModelInfo[] }>("/api/v1/providers/deepseek/models"),
+  setDefaultModel: (modelId: string) =>
+    requestJson<{ model_id: string }>("/api/v1/settings/default-model", {
+      method: "PUT",
+      body: JSON.stringify({ model_id: modelId }),
+    }),
+  grantDesktop: (paths: string[]) =>
+    requestJson<ContextGrant>("/api/v1/context/grants", {
+      method: "POST",
+      body: JSON.stringify({ paths }),
+    }),
+  uploadContext: async (files: File[]) => {
+    const body = new FormData();
+    files.forEach((file) => body.append("files", file));
+    const response = await fetch("/api/v1/context/uploads", { method: "POST", body });
+    if (!response.ok) {
+      const payload = (await response.json()) as { detail?: ApiErrorDetail };
+      throw new ApiClientError(response.status, payload.detail ?? { code: "upload_failed", message: "文件上传失败。", questions: [], context: {} });
+    }
+    return response.json() as Promise<ContextGrant>;
+  },
+  createAgentSession: (payload: GenerationRequest & { model_id: string; offline_rules: boolean; context_grants: string[] }) =>
+    requestJson<AgentSession>("/api/v1/agent/sessions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  agentTurn: async (sessionId: string, answers: string[], onEvent: (event: AgentEvent) => void) => {
+    const response = await fetch(`/api/v1/agent/sessions/${sessionId}/turns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+    await parseEventStream(response, onEvent);
+  },
+  cancelAgent: (sessionId: string) =>
+    requestJson<{ cancelled: boolean }>(`/api/v1/agent/sessions/${sessionId}/cancel`, { method: "POST" }),
 };

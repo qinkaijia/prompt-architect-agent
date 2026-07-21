@@ -11,6 +11,7 @@ class AppPaths:
     database: Path
     runs: Path
     logs: Path
+    temp: Path
 
     @classmethod
     def default(cls) -> "AppPaths":
@@ -32,7 +33,9 @@ class AppPaths:
             database=data / "history.db",
             runs=data / "runs",
             logs=data / "logs",
+            temp=data / "temp",
         )
         paths.runs.mkdir(parents=True, exist_ok=True)
         paths.logs.mkdir(parents=True, exist_ok=True)
+        paths.temp.mkdir(parents=True, exist_ok=True)
         return paths

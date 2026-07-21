@@ -1,42 +1,33 @@
 # Architecture
 
-Prompt Architect Agent separates task understanding, routing, rendering, publishing, and local application surfaces so future analyzers can change without breaking the CLI or HTTP contracts.
+Prompt Architect Agent keeps the v0.2 deterministic compiler as an explicit offline path and adds a DeepSeek-driven agent path for the desktop and browser workbench.
 
-## Data flow
+## Intelligent data flow
 
-1. `RequirementAnalyzer` redacts secrets, classifies the task, infers safe defaults, and records field provenance.
-2. `ComplexityScorer` assigns six independent scores and explains every result.
-3. `StrategyRouter` maps the total to one strategy. Disabling staging can downgrade a complex task, but cannot force a project-level task into one prompt.
-4. `ContextManager` classifies supplied paths as required, optional, reference-only, or ignored. It checks path existence but does not read file contents.
-5. `AdapterRegistry` selects target-specific operating guidance from YAML profiles.
-6. `PromptCompiler` renders packaged Jinja templates and creates the appropriate artifact set.
-7. `PromptReviewer` applies safety and completeness rules. One deterministic repair pass is allowed.
-8. `PromptArchitect.build()` returns a reviewed in-memory result; `generate()` preserves the CLI publishing contract.
-9. `ArtifactPublisher` writes to a temporary directory and atomically renames it only after review passes.
-10. `RunService` indexes successful runs in SQLite while keeping Markdown and JSON as ordinary files.
-11. FastAPI exposes the same core to the React workbench and pywebview desktop shell.
+1. `CredentialStore` resolves `DEEPSEEK_API_KEY` before the operating-system credential vault. Full secrets never enter API responses or SQLite.
+2. `DeepSeekProvider` uses the fixed `https://api.deepseek.com` endpoint, dynamically lists models, requests JSON output, normalizes usage, and retries transient failures at most twice.
+3. `AgentService` owns the persisted session state and an in-memory runtime containing the original request and temporary context grants.
+4. `AgentOrchestrator` asks the model for a typed task analysis and six explained complexity dimensions. `StrategyRouter` deterministically maps the score to one of the four existing strategies.
+5. A session pauses in `clarifying` when the model returns critical questions. Answers are secret-redacted before persistence and analysis resumes for at most three rounds.
+6. `ContextGrantStore` permits only desktop-picker paths or browser uploads. `ContextLoader` reads supported files, extracts PDF text, redacts common secret patterns, applies size limits, and wraps content as untrusted data.
+7. The model returns a constrained filename/content package. Filenames must exactly match the selected strategy and pass containment checks.
+8. An independent model critic and `PromptReviewer` must both pass. One model repair is allowed; a failed gate publishes nothing.
+9. `ArtifactPublisher` atomically writes the reviewed package. `HistoryStore` links the run to the redacted session and token usage.
 
-## Public models
+## Session states and streaming
 
-- `TaskSpec`: normalized request, target, deliverables, context, constraints, risk, score, strategy, provenance, and blockers.
-- `ComplexityAssessment`: six `DimensionScore` values, total, strategy, and explanation.
-- `ContextManifest`: categorized file references and read conditions.
-- `PromptArtifact`: filename and rendered Markdown.
-- `ReviewResult`: pass state, score, issues, suggestions, and repair state.
-- `GenerationResult`: complete in-memory result plus the published output path.
+Agent sessions move through `pending`, `clarifying`, `generating`, `reviewing`, `repairing`, and a terminal `completed`, `failed`, or `cancelled` state. The turn endpoint emits SSE events for real stages, questions, analysis, publication, failure, and cancellation; it never emits a fabricated percentage.
 
-The Web API adds `GenerationRequest`, `AnalysisResponse`, `RunSummary`, `RunDetail`, `ArtifactMetadata`, and `ApiError`. API models reuse the core enums and never serialize `raw_request`.
+SQLite schema v2 stores redacted session summaries, redacted user/assistant messages, settings, and aggregate usage. Credentials, raw provider requests/responses, model reasoning, and file contents are excluded. Incomplete active sessions are marked failed after restart because their sensitive runtime state is intentionally memory-only.
 
-The original request is excluded from Pydantic serialization. Only the redacted request is persisted. SQLite stores searchable metadata and file indexes; artifact contents remain in the managed run directory.
+## Context boundary
 
-## Local application boundary
+- Desktop paths are accepted only from the pywebview-enabled server and registered as opaque in-memory grants.
+- Browser files are copied under the managed temporary root and deleted after completion, failure, cancellation, or the next application startup.
+- Directory grants are manifest-only; there is no recursive repository scan.
+- Text files are limited to 256 KiB, PDFs to 20 MiB, and a task to ten files and roughly 32K input tokens of extracted context.
+- Artifact reads still require a database entry and resolution inside the managed run directory.
 
-- FastAPI binds to loopback and serves the built React application on the same origin.
-- The desktop bridge exposes only file selection, directory selection, and opening a managed run folder.
-- Artifact lookup requires both a database entry and path containment within the managed runs root.
-- A failed database insert rolls back the just-published directory; if the process is interrupted between publishing and indexing, startup reconciliation restores the missing index.
-- CLI output remains relative to the current directory, while desktop and Web output uses the platform application-data directory.
+## Offline compatibility
 
-## Extension points
-
-`RuleTaskClassifier`, `ModelAdapter`, `ContextManager`, `PromptCompiler`, `PromptReviewer`, `HistoryStore`, and `RunService` have narrow interfaces. Later releases can add LLM classification, opt-in repository scanning, PDF indexing, and feedback without changing strategy semantics.
+`PromptArchitect.build()` and `generate()` retain the deterministic v0.2 contract for CLI and explicit offline use. Existing run APIs, Markdown conventions, history import, archive behavior, and project package filenames remain compatible.

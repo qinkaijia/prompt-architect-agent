@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prompt-architect-agent"
-version = "0.2.0"
-description = "A local-first prompt architecture workbench for desktop, browser, and CLI use."
+version = "0.3.0"
+description = "A local-first DeepSeek-powered prompt architecture agent for desktop, browser, and CLI use."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -31,12 +31,20 @@ dependencies = [
 [project.optional-dependencies]
 web = [
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "keyring>=25.7,<26",
   "platformdirs>=4,<5",
+  "pypdf>=6.14,<7",
+  "python-multipart>=0.0.20,<1",
   "uvicorn>=0.34,<1",
 ]
 desktop = [
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "keyring>=25.7,<26",
   "platformdirs>=4,<5",
+  "pypdf>=6.14,<7",
+  "python-multipart>=0.0.20,<1",
   "pywebview>=5.4,<7",
   "uvicorn>=0.34,<1",
 ]
@@ -46,8 +54,12 @@ dev = [
 ]
 build = [
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "keyring>=25.7,<26",
   "platformdirs>=4,<5",
+  "pypdf>=6.14,<7",
   "pyinstaller>=6.12,<7",
+  "python-multipart>=0.0.20,<1",
   "pywebview>=5.4,<7",
   "uvicorn>=0.34,<1",
 ]
@@ -65,7 +77,7 @@ Issues = "https://github.com/qinkaijia/prompt-architect-agent/issues"
 include = ["prompt_architect*"]
 
 [tool.setuptools.package-data]
-prompt_architect = ["config/*.yaml", "templates/*/*.j2", "web/static/**/*"]
+prompt_architect = ["config/*.yaml", "templates/*/*.j2", "llm/prompts/*.txt", "web/static/**/*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

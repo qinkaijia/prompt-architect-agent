@@ -2,6 +2,9 @@ from pathlib import Path
 import sqlite3
 
 from prompt_architect.service import PromptArchitect
+from prompt_architect.llm.context import ContextGrantStore
+from prompt_architect.llm.deepseek import DeepSeekProvider
+from prompt_architect.web.agent import AgentService
 from prompt_architect.web.models import GenerationRequest
 from prompt_architect.web.paths import AppPaths
 from prompt_architect.web.runs import RunService
@@ -48,7 +51,7 @@ def test_schema_version_and_restart_recovery(tmp_path: Path) -> None:
     paths = AppPaths.from_base(tmp_path)
     first = HistoryStore(paths)
     with sqlite3.connect(paths.database) as connection:
-        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 1
+        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 2
 
     result = PromptArchitect().generate(
         "让 Codex 修改一个 Python 函数，为函数增加输入参数检查。",
@@ -92,3 +95,25 @@ def test_database_stores_only_bounded_history_excerpt(tmp_path: Path) -> None:
     assert len(stored_request) == 1001
     assert len(stored_goal) == 1001
     assert stored_request.endswith("…")
+
+
+def test_restart_marks_memory_only_agent_session_failed(tmp_path: Path) -> None:
+    paths = AppPaths.from_base(tmp_path)
+    store = HistoryStore(paths)
+    store.create_agent_session(
+        session_id="session-restart",
+        sanitized_request="脱敏请求",
+        target_agent="codex",
+        language="zh-CN",
+        provider="deepseek",
+        model_id="auto",
+    )
+    store.update_agent_session(
+        "session-restart", status="clarifying", questions_json='["需要哪个文件？"]'
+    )
+    restarted = RunService(paths)
+    AgentService(restarted, DeepSeekProvider(), ContextGrantStore(paths.temp))
+    detail = restarted.history.get_agent_session("session-restart")
+    assert detail is not None
+    assert detail["status"] == "failed"
+    assert "重新开始" in detail["last_error"]

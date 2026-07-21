@@ -8,11 +8,18 @@ CLI, normalized task schema, YAML classification and scoring, four strategies, f
 
 React browser UI, Windows desktop shell, FastAPI, SQLite history, preview/export, native path selection, responsive design, and release packaging.
 
-## Next: LLM-assisted analysis
+## 0.3: DeepSeek prompt agent
 
-- Optional structured extraction through a configurable model interface.
-- Rule/LLM disagreement reporting.
-- Ambiguity discovery and context compression.
+- DeepSeek structured analysis, targeted clarification, generation, model review, and one repair.
+- Windows credential-vault setup, dynamic models, SSE stages, cancellation, and token usage.
+- Opt-in source/text/PDF context with temporary grants, limits, and secret redaction.
+- Deterministic reviewer retained as a second quality gate and offline fallback.
+
+## Next: provider expansion and evaluation
+
+- Optional OpenAI and Kimi providers behind the same interface.
+- Repeatable prompt-quality evaluation sets and model comparison.
+- Better resumability without persisting raw file contents.
 
 ## Later: opt-in project context
 

@@ -38,9 +38,9 @@ jobs:
       - name: Build installer and checksums
         shell: pwsh
         run: |
-          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "v0.2.0-dev" }
+          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "v0.3.0-dev" }
           $version = $tag.TrimStart("v")
-          $versionInfo = if ($env:GITHUB_REF_TYPE -eq "tag") { "$version.0" } else { "0.2.0.0" }
+          $versionInfo = if ($env:GITHUB_REF_TYPE -eq "tag") { "$version.0" } else { "0.3.0.0" }
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup 6 is unavailable" }
           New-Item -ItemType Directory -Force -Path dist\release | Out-Null
@@ -75,6 +75,6 @@ jobs:
         run: |
           gh release view $env:GITHUB_REF_NAME 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --title "Prompt Architect $env:GITHUB_REF_NAME" --notes-file docs/release-notes-v0.2.0.md
+            gh release create $env:GITHUB_REF_NAME --title "Prompt Architect $env:GITHUB_REF_NAME" --notes-file docs/release-notes-v0.3.0.md
           }
           gh release upload $env:GITHUB_REF_NAME dist\release\* --clobber

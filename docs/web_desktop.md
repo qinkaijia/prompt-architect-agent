@@ -1,35 +1,35 @@
 # Web and desktop workbench
 
-## Product layout
+## First-run setup
 
-The application opens directly into a three-area workspace: searchable history, the task and result surface, and an explainable analysis panel. Below 1100 pixels the analysis becomes a drawer; below 800 pixels both side panels become drawers and the content flows in one column.
+When no DeepSeek credential exists, the application opens a focused three-step setup instead of the workbench:
 
-The visual system uses quiet neutral surfaces, one teal accent, an 8-pixel spacing rhythm, restrained borders, and system fonts. It follows the operating-system color scheme and honors reduced-motion preferences.
+1. Open the official DeepSeek key page.
+2. Paste a newly-created key into a masked field.
+3. Save and connect.
 
-## Runtime
+The server validates the key through the model-list endpoint before saving it. Success exposes only a last-four-character hint. Invalid keys, insufficient balance, network failures, rate limits, and unavailable credential storage produce distinct Chinese recovery instructions. Environment-managed credentials are displayed as read-only.
 
-The React production build is packaged in `prompt_architect/web/static`. FastAPI serves the static application and `/api/v1` endpoints from one origin. Browser mode uses `prompt-architect web`; desktop mode starts the same server on a random loopback port and opens it in pywebview.
+The setup can be skipped into clearly-labelled rule offline mode. Once configured, a compact status pill opens the same settings as a drawer with connection test, automatic/manual model choice, key replacement, removal, and offline switching.
 
-Desktop data is stored under the platform application-data directory:
+## Workbench
+
+The three-area layout remains: local history, task/result workspace, and explainable analysis. The primary action is **智能生成**. Real stages appear as a compact status row. Questions are rendered as answer fields and resume the same session. A running request can be cancelled.
+
+File selection is authorization: desktop selection creates a local grant, while browser selection uploads into session-scoped temporary storage. The UI names exactly what may be sent to DeepSeek. Manual paths remain available only in rule offline mode.
+
+Below 1100 pixels analysis becomes a drawer; below 800 pixels both side panels become drawers. The setup and settings remain usable at 320 pixels and 200% zoom. System light/dark themes, keyboard focus rings, reduced motion, semantic labels, and low-density neutral styling are preserved.
+
+## Runtime and storage
+
+FastAPI serves the React build and `/api/v1` from one loopback origin. Desktop mode opens that service in pywebview. Managed data is stored under:
 
 ```text
 PromptArchitect/
 ├── history.db
 ├── logs/
-└── runs/
+├── runs/
+└── temp/
 ```
 
-## Persistence and recovery
-
-SQLite stores only secret-redacted metadata and artifact indexes. Markdown and JSON stay in per-run directories. Publishing is atomic and an indexing failure rolls back the new run directory. If the process is interrupted between those steps, the next startup reconciles the unindexed run folder from its analysis and review files.
-
-Runs can be archived but are not permanently deleted in v0.2. Legacy CLI output can be imported explicitly; it is copied into the managed runs directory before indexing.
-
-## Security boundary
-
-- The server listens on `127.0.0.1` only.
-- Same-origin and trusted-host checks reject cross-origin browser writes.
-- The native bridge has no general shell or arbitrary file-read function.
-- File and directory selection records paths only; task generation does not read their contents.
-- Artifact filenames must exist in the database and resolve inside the managed run directory.
-- Original requests and detected secrets are excluded from persisted analysis and history.
+The credential is stored by the operating system rather than in this directory. `temp/` never contains durable history and is cleared after a task or clean startup.

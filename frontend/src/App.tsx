@@ -6,14 +6,20 @@ import {
   Clipboard,
   Copy,
   Download,
+  ExternalLink,
+  Eye,
+  EyeOff,
   FilePlus2,
   Files,
   FolderOpen,
   History,
+  KeyRound,
   Menu,
   PanelRight,
   Plus,
   Search,
+  Settings,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -21,9 +27,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { api, ApiClientError } from "./api";
 import type {
+  AgentEvent,
   AnalysisResponse,
   GenerationRequest,
   MetaResponse,
+  ProviderStatus,
   RunDetail,
   RunSummary,
   TargetAgent,
@@ -144,6 +152,13 @@ function App() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [historyOpen, setHistoryOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [provider, setProvider] = useState<ProviderStatus | null>(null);
+  const [providerLoaded, setProviderLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [contextGrants, setContextGrants] = useState<string[]>([]);
+  const [activeSession, setActiveSession] = useState<string | null>(null);
+  const [agentStage, setAgentStage] = useState("");
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -156,6 +171,10 @@ function App() {
 
   useEffect(() => {
     api.meta().then(setMeta).catch(() => setError("无法连接本地服务。"));
+    api.provider()
+      .then(setProvider)
+      .catch(() => setError("无法读取 DeepSeek 设置。"))
+      .finally(() => setProviderLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -169,14 +188,34 @@ function App() {
 
   const chooseFiles = async () => {
     if (window.pywebview) {
-      addPaths(await window.pywebview.api.choose_files());
+      const selected = await window.pywebview.api.choose_files();
+      if (selected.length) {
+        const grant = await api.grantDesktop(selected);
+        addPaths(grant.files.map((item) => item.name));
+        setContextGrants((current) => [...current, grant.id]);
+      }
     }
   };
 
   const chooseDirectory = async () => {
     if (window.pywebview) {
       const chosen = await window.pywebview.api.choose_directory();
-      if (chosen) addPaths([chosen]);
+      if (chosen) {
+        const grant = await api.grantDesktop([chosen]);
+        addPaths(grant.files.map((item) => item.name));
+        setContextGrants((current) => [...current, grant.id]);
+      }
+    }
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    if (!files.length) return;
+    try {
+      const grant = await api.uploadContext(files);
+      addPaths(grant.files.map((item) => item.name));
+      setContextGrants((current) => [...current, grant.id]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "文件授权失败。");
     }
   };
 
@@ -229,6 +268,45 @@ function App() {
     [loadArtifact],
   );
 
+  const handleAgentEvent = (event: AgentEvent) => {
+    if (event.event === "stage.started") {
+      setAgentStage(String(event.data.message ?? "正在处理…"));
+    } else if (event.event === "analysis.completed") {
+      setAnalysis(event.data.analysis as unknown as AnalysisResponse);
+      setAnalysisOpen(true);
+    } else if (event.event === "questions.required") {
+      setBlockers((event.data.questions as string[]) ?? []);
+      setAnswers({});
+      setAgentStage("");
+    } else if (event.event === "failed") {
+      setError(String(event.data.message ?? "智能生成失败，请重试。"));
+      setAgentStage("");
+      setActiveSession(null);
+    }
+  };
+
+  const continueAgent = async (sessionId: string, turnAnswers: string[]) => {
+    let published: RunDetail | null = null;
+    let completionNote = "提示词已由 DeepSeek 生成，并通过双重质量检查。";
+    await api.agentTurn(sessionId, turnAnswers, (event) => {
+      handleAgentEvent(event);
+      if (event.event === "run.published") {
+        published = event.data.run as unknown as RunDetail;
+        const usage = event.data.usage as { total_tokens?: number } | undefined;
+        const model = String(event.data.model ?? "DeepSeek");
+        completionNote = `生成完成 · ${model} · ${usage?.total_tokens ?? 0} Token · 已通过双重质量检查`;
+      }
+    });
+    if (published) {
+      setBlockers([]);
+      setActiveSession(null);
+      setAgentStage("");
+      setNotice(completionNote);
+      await openRun(published);
+      await refreshHistory();
+    }
+  };
+
   const generate = async () => {
     const payload = payloadFrom(form, paths);
     if (!payload.raw_request) {
@@ -239,11 +317,26 @@ function App() {
     setError("");
     setNotice("");
     try {
-      const run = await api.generate(payload);
-      setBlockers([]);
-      setNotice("提示词已生成并通过质量检查。");
-      await openRun(run);
-      await refreshHistory();
+      if (offlineMode) {
+        const run = await api.generate(payload);
+        setBlockers([]);
+        setNotice("提示词已通过规则离线生成。");
+        await openRun(run);
+        await refreshHistory();
+      } else {
+        if (!provider?.configured) {
+          setSettingsOpen(true);
+          throw new Error("请先连接 DeepSeek。");
+        }
+        const session = await api.createAgentSession({
+          ...payload,
+          model_id: provider.default_model || "auto",
+          offline_rules: false,
+          context_grants: contextGrants,
+        });
+        setActiveSession(session.id);
+        await continueAgent(session.id, []);
+      }
     } catch (caught) {
       if (caught instanceof ApiClientError && caught.detail.code === "missing_information") {
         setBlockers(caught.detail.questions);
@@ -259,13 +352,22 @@ function App() {
   };
 
   const completeBlockers = async () => {
-    const additions = blockers
-      .map((question, index) => (answers[index]?.trim() ? `${question} ${answers[index].trim()}` : ""))
-      .filter(Boolean);
-    if (additions.length !== blockers.length) {
+    const values = blockers.map((_, index) => answers[index]?.trim() ?? "");
+    if (values.some((item) => !item)) {
       setError("请回答所有补充问题。");
       return;
     }
+    if (activeSession) {
+      setBusy("generate");
+      setError("");
+      try {
+        await continueAgent(activeSession, values);
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
+    const additions = blockers.map((question, index) => `${question} ${values[index]}`);
     const next = {
       ...form,
       rawRequest: `${form.rawRequest.trim()}\n\n补充信息：\n${additions.join("\n")}`,
@@ -277,6 +379,7 @@ function App() {
   const newTask = () => {
     setForm(EMPTY_FORM);
     setPaths([]);
+    setContextGrants([]);
     setAnalysis(null);
     setSelectedRun(null);
     setSelectedArtifact("");
@@ -285,6 +388,17 @@ function App() {
     setNotice("");
     setError("");
     setHistoryOpen(false);
+    setActiveSession(null);
+    setAgentStage("");
+  };
+
+  const cancelAgent = async () => {
+    if (!activeSession) return;
+    await api.cancelAgent(activeSession);
+    setActiveSession(null);
+    setBusy("");
+    setAgentStage("");
+    setNotice("已取消智能生成。");
   };
 
   const archiveCurrent = async () => {
@@ -326,6 +440,18 @@ function App() {
     } satisfies AnalysisResponse;
   }, [analysis, selectedRun]);
 
+  if (!providerLoaded) {
+    return <div className="setup-loading"><span className="spinner" /><p>正在准备 Prompt Architect…</p></div>;
+  }
+
+  if (!provider?.configured && !offlineMode) {
+    return <ProviderSetup
+      version={meta?.version ?? "0.3.0"}
+      onConnected={setProvider}
+      onOffline={() => setOfflineMode(true)}
+    />;
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -340,10 +466,13 @@ function App() {
         <div className="brand" aria-label="Prompt Architect">
           <BrainCircuit aria-hidden="true" />
           <span>Prompt Architect</span>
-          <span className="version">v{meta?.version ?? "0.2.0"}</span>
+          <span className="version">v{meta?.version ?? "0.3.0"}</span>
         </div>
         <div className="topbar-actions">
-          <span className="local-state"><span /> 本地运行</span>
+          <button className={`provider-pill ${offlineMode ? "is-offline" : ""}`} type="button" onClick={() => setSettingsOpen(true)}>
+            {offlineMode ? <><span className="status-dot" /> 规则离线</> : <><span className="status-dot" /> DeepSeek {provider?.key_hint}</>}
+          </button>
+          <button className="icon-button" type="button" aria-label="打开模型设置" onClick={() => setSettingsOpen(true)}><Settings aria-hidden="true" /></button>
           <button
             className="icon-button analysis-toggle"
             type="button"
@@ -404,8 +533,8 @@ function App() {
         <section className="workspace-intro">
           <div>
             <span className="eyebrow">提示词工作台</span>
-            <h1>把需求整理成 AI 真正能执行的任务</h1>
-            <p>先判断任务规模，再生成最合适的一套提示词。</p>
+            <h1>把想法交给智能体，得到真正可执行的提示词</h1>
+            <p>{offlineMode ? "当前使用规则离线模式，不会连接外部模型。" : "DeepSeek 会理解需求、按需追问并独立检查生成结果。"}</p>
           </div>
         </section>
 
@@ -478,18 +607,19 @@ function App() {
             <div className="context-picker">
               <div>
                 <strong>上下文路径</strong>
-                <p>只建立索引，不读取文件内容。</p>
+                <p>{offlineMode ? "离线模式只建立路径索引。" : "只有你在这里选择的文件才会发送给 DeepSeek。"}</p>
               </div>
               <div className="path-actions">
                 {meta?.desktop && <>
                   <button className="button ghost" type="button" onClick={chooseFiles}><Files aria-hidden="true" /> 选择文件</button>
                   <button className="button ghost" type="button" onClick={chooseDirectory}><FolderOpen aria-hidden="true" /> 选择目录</button>
                 </>}
+                {!meta?.desktop && !offlineMode && <label className="button ghost file-upload"><Files aria-hidden="true" /> 选择文件<input type="file" multiple onChange={(event) => uploadFiles(Array.from(event.target.files ?? []))} /></label>}
               </div>
-              <div className="manual-path">
+              {offlineMode && <div className="manual-path">
                 <input value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} placeholder="输入文件或目录路径" />
                 <button className="button ghost" type="button" onClick={() => { addPaths([pathDraft.trim()]); setPathDraft(""); }}>添加</button>
-              </div>
+              </div>}
               {!!paths.length && <div className="path-list">
                 {paths.map((path) => <span key={path}><code>{path}</code><button type="button" aria-label={`移除 ${path}`} onClick={() => setPaths(paths.filter((item) => item !== path))}><X aria-hidden="true" /></button></span>)}
               </div>}
@@ -501,10 +631,13 @@ function App() {
               {busy === "analyze" ? <span className="spinner" /> : <BrainCircuit aria-hidden="true" />} 分析任务
             </button>
             <button className="button primary" type="button" disabled={!!busy} onClick={generate}>
-              {busy === "generate" ? <span className="spinner" /> : <Sparkles aria-hidden="true" />} 生成提示词
+              {busy === "generate" ? <span className="spinner" /> : <Sparkles aria-hidden="true" />} {offlineMode ? "离线生成" : "智能生成"}
             </button>
+            {busy === "generate" && activeSession && <button className="button ghost" type="button" onClick={cancelAgent}>取消</button>}
           </div>
         </section>
+
+        {agentStage && <div className="agent-progress" role="status"><span className="spinner" /><span>{agentStage}</span><small>不会显示虚假的完成百分比</small></div>}
 
         {!!blockers.length && (
           <section className="surface blockers" aria-labelledby="blocker-title">
@@ -517,7 +650,7 @@ function App() {
                 <input value={answers[index] ?? ""} onChange={(event) => setAnswers({ ...answers, [index]: event.target.value })} />
               </label>
             ))}
-            <button className="button primary" type="button" onClick={completeBlockers}>补充并重新分析</button>
+            <button className="button primary" type="button" onClick={completeBlockers}>{activeSession ? "回答并继续生成" : "补充并重新分析"}</button>
           </section>
         )}
 
@@ -554,9 +687,131 @@ function App() {
         <AnalysisPanel analysis={currentAnalysis} />
       </aside>
 
-      {(historyOpen || analysisOpen) && <button className="scrim" type="button" aria-label="关闭侧栏" onClick={() => { setHistoryOpen(false); setAnalysisOpen(false); }} />}
+      {settingsOpen && <ProviderSettings
+        provider={provider}
+        offlineMode={offlineMode}
+        onProvider={setProvider}
+        onOffline={setOfflineMode}
+        onClose={() => setSettingsOpen(false)}
+      />}
+
+      {(historyOpen || analysisOpen || settingsOpen) && <button className="scrim" type="button" aria-label="关闭侧栏" onClick={() => { setHistoryOpen(false); setAnalysisOpen(false); setSettingsOpen(false); }} />}
     </div>
   );
+}
+
+function ProviderSetup({ version, onConnected, onOffline }: {
+  version: string;
+  onConnected: (status: ProviderStatus) => void;
+  onOffline: () => void;
+}) {
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const connect = async () => {
+    const normalized = apiKey.trim();
+    if (!normalized) {
+      setError("请粘贴新创建的 DeepSeek API Key。");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const status = await api.saveCredential(normalized);
+      setApiKey("");
+      onConnected(status);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "连接失败，请检查密钥后重试。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <main className="setup-shell">
+    <header className="setup-brand"><BrainCircuit aria-hidden="true" /><span>Prompt Architect</span><small>v{version}</small></header>
+    <section className="setup-card" aria-labelledby="setup-title">
+      <div className="setup-heading">
+        <span className="setup-icon"><KeyRound aria-hidden="true" /></span>
+        <div><span className="eyebrow">只需设置一次</span><h1 id="setup-title">连接 DeepSeek，开始智能生成</h1><p>密钥只保存在这台电脑的系统凭据库中，不会写入历史记录或生成文件。</p></div>
+      </div>
+      <ol className="setup-steps">
+        <li><span>1</span><div><strong>创建新密钥</strong><p>刚才发到聊天里的旧密钥需要先撤销，再创建一个新的。</p><a className="text-link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">打开 DeepSeek 密钥页面 <ExternalLink aria-hidden="true" /></a></div></li>
+        <li><span>2</span><div><strong>粘贴到这里</strong><p>请不要把新密钥发送到聊天、截图或代码仓库。</p><div className="secret-input"><input autoFocus value={apiKey} onChange={(event) => setApiKey(event.target.value)} type={showKey ? "text" : "password"} placeholder="粘贴 DeepSeek API Key" aria-label="DeepSeek API Key" autoComplete="off" spellCheck={false} /><button type="button" aria-label={showKey ? "隐藏密钥" : "显示密钥"} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button>{apiKey && <button type="button" aria-label="清空密钥" onClick={() => setApiKey("")}><X aria-hidden="true" /></button>}</div></div></li>
+        <li><span>3</span><div><strong>保存并连接</strong><p>应用会先验证连接，成功后才安全保存，不会产生模型生成费用。</p></div></li>
+      </ol>
+      {error && <div className="message error" role="alert">{error}<span>密钥无效时请重新复制；余额不足可前往 <a href="https://platform.deepseek.com/top_up" target="_blank" rel="noreferrer">DeepSeek 充值</a>。</span></div>}
+      <button className="button primary setup-primary" type="button" disabled={busy} onClick={connect}>{busy ? <span className="spinner" /> : <ShieldCheck aria-hidden="true" />} 保存并连接</button>
+      <button className="button ghost setup-offline" type="button" onClick={onOffline}>暂时使用规则离线模式</button>
+    </section>
+  </main>;
+}
+
+function ProviderSettings({ provider, offlineMode, onProvider, onOffline, onClose }: {
+  provider: ProviderStatus | null;
+  offlineMode: boolean;
+  onProvider: (status: ProviderStatus) => void;
+  onOffline: (value: boolean) => void;
+  onClose: () => void;
+}) {
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [models, setModels] = useState(provider?.models ?? []);
+  const [model, setModel] = useState(provider?.default_model ?? "auto");
+
+  const test = async () => {
+    setBusy("test"); setError(""); setMessage("");
+    try {
+      const status = await api.testProvider();
+      setModels(status.models); onProvider(status); setMessage("连接正常，可以智能生成。");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "连接测试失败。"); }
+    finally { setBusy(""); }
+  };
+  const replace = async () => {
+    if (!apiKey.trim()) { setError("请先粘贴新的 API Key。"); return; }
+    setBusy("save"); setError("");
+    try {
+      const status = await api.saveCredential(apiKey.trim());
+      setApiKey(""); setEditing(false); setModels(status.models); onProvider(status); onOffline(false); setMessage("新密钥已安全保存。");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "保存失败。"); }
+    finally { setBusy(""); }
+  };
+  const remove = async () => {
+    setBusy("remove"); setError("");
+    try { const status = await api.deleteCredential(); onProvider(status); onOffline(true); setMessage("密钥已从系统凭据库移除。"); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "无法移除密钥。"); }
+    finally { setBusy(""); }
+  };
+  const selectModel = async (value: string) => {
+    setModel(value); setError("");
+    try { await api.setDefaultModel(value); if (provider) onProvider({ ...provider, default_model: value }); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "模型设置失败。"); }
+  };
+
+  return <aside className="settings-drawer" aria-label="DeepSeek 设置">
+    <div className="settings-header"><div><span className="eyebrow">模型连接</span><h2>DeepSeek 设置</h2></div><button className="icon-button" type="button" aria-label="关闭设置" onClick={onClose}><X aria-hidden="true" /></button></div>
+    <div className={`connection-card ${offlineMode ? "is-offline" : ""}`}><span className="connection-icon"><ShieldCheck aria-hidden="true" /></span><div><strong>{offlineMode ? "规则离线模式" : provider?.configured ? "DeepSeek 已配置" : "尚未连接"}</strong><p>{offlineMode ? "不会把任务发送给外部模型。" : provider?.source === "environment" ? "由 DEEPSEEK_API_KEY 环境变量管理" : `${provider?.key_hint ?? ""} · 保存在 Windows 系统凭据库`}</p></div></div>
+    {message && <div className="message success" role="status"><Check aria-hidden="true" /> {message}</div>}
+    {error && <div className="message error" role="alert">{error}</div>}
+    {provider?.configured && <>
+      <label className="field"><span>默认模型</span><select value={model} onChange={(event) => selectModel(event.target.value)}><option value="auto">自动选择（推荐）</option>{models.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</select><small>智能生成完成后会显示实际使用的模型。</small></label>
+      <button className="button secondary full" type="button" disabled={!!busy} onClick={test}>{busy === "test" ? <span className="spinner" /> : <ShieldCheck aria-hidden="true" />} 测试连接</button>
+    </>}
+    {!provider?.configured && !editing && <button className="button primary full settings-connect" type="button" onClick={() => setEditing(true)}><KeyRound aria-hidden="true" /> 连接 DeepSeek</button>}
+    {editing && <div className="replace-key"><label className="field"><span>新的 API Key</span><div className="secret-input"><input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type={showKey ? "text" : "password"} autoComplete="off" spellCheck={false} /><button type="button" aria-label={showKey ? "隐藏密钥" : "显示密钥"} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></div></label><button className="button primary full" type="button" disabled={!!busy} onClick={replace}>{busy === "save" ? <span className="spinner" /> : <ShieldCheck aria-hidden="true" />} 保存并连接</button></div>}
+    <div className="settings-actions">
+      {provider?.configured && provider.source !== "environment" && <button className="button ghost full" type="button" onClick={() => setEditing(!editing)}>{editing ? "取消更换" : "更换密钥"}</button>}
+      {!provider?.configured && editing && <button className="button ghost full" type="button" onClick={() => { setEditing(false); setApiKey(""); }}>取消</button>}
+      {provider?.configured && provider.source !== "environment" && <button className="button danger full" type="button" disabled={!!busy} onClick={remove}>移除密钥</button>}
+      {provider?.configured && <button className="button ghost full" type="button" onClick={() => onOffline(!offlineMode)}>{offlineMode ? "切回 DeepSeek 智能模式" : "切换为规则离线模式"}</button>}
+      <a className="text-link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">管理 DeepSeek 密钥 <ExternalLink aria-hidden="true" /></a>
+    </div>
+  </aside>;
 }
 
 function TextAreaField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
